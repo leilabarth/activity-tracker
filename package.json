@@ -1,0 +1,13 @@
+{
+  "name": "activity-tracker",
+  "version": "1.0.0",
+  "description": "Track daily activities and sync with Google Drive",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server",
+    "dev": "http-server"
+  },
+  "keywords": ["activity", "tracker", "google-drive", "productivity"],
+  "author": "",
+  "license": "MIT"
+}

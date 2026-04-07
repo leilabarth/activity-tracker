@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activity Tracker</title>
+<script src="https://accounts.google.com/gsi/client"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: #f5f5f5; color: #333; }
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+h1 { font-size: 28px; font-weight: 600; }
+.auth-section { display: flex; align-items: center; gap: 12px; }
+#googleSignInButton { padding: 10px 20px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+#googleSignInButton:hover { background: #f8f8f8; }
+.auth-status { font-size: 13px; color: #666; }
+.auth-status.connected { color: #22863a; font-weight: 500; }
+.auth-status.connected::before { content: '✓ '; color: #28a745; }
+.tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid #e1e4e8; }
+.tab { padding: 12px 16px; font-size: 14px; border: none; background: none; cursor: pointer; color: #666; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.tab:hover { color: #333; }
+.tab.active { color: #0366d6; border-bottom-color: #0366d6; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.form-section { background: white; border: 1px solid #e1e4e8; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #24292e; }
+input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-family: inherit; font-size: 14px; transition: border-color 0.2s; }
+input:focus, textarea:focus { outline: none; border-color: #0366d6; box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.1); }
+textarea { resize: vertical; min-height: 80px; }
+.checkbox-group { display: flex; align-items: center; gap: 8px; }
+input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+.button-group { display: flex; gap: 12px; }
+button { padding: 10px 16px; border: 1px solid #d1d5da; background: white; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: #24292e; transition: all 0.2s; }
+button:hover { background: #f6f8fa; border-color: #0366d6; }
+button.primary { background: #0366d6; color: white; border-color: #0366d6; }
+button.primary:hover { background: #0256c7; }
+.activity-item { background: white; border-radius: 6px; padding: 16px; margin-bottom: 12px; border-left: 3px solid #0366d6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.activity-item.waiting { border-left-color: #ffc107; }
+.activity-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
+.activity-title { font-weight: 600; font-size: 15px; color: #24292e; }
+.activity-date { font-size: 13px; color: #666; }
+.activity-details { font-size: 13px; color: #666; line-height: 1.5; margin: 8px 0; }
+.waiting-badge { display: inline-block; background: #fff3cd; color: #856404; font-size: 12px; padding: 4px 8px; border-radius: 4px; margin-top: 8px; border: 1px solid #ffeeba; }
+.search-box { margin-bottom: 20px; }
+.search-box input { width: 100%; padding: 12px 16px; }
+.weekly-report { background: white; border: 1px solid #e1e4e8; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.report-section { margin-bottom: 24px; }
+.report-section h3 { font-size: 15px; font-weight: 600; color: #24292e; margin-bottom: 12px; }
+.report-item { font-size: 13px; color: #666; padding: 10px 0; border-bottom: 1px solid #e1e4e8; }
+.report-item:last-child { border-bottom: none; }
+.report-item strong { color: #24292e; }
+.empty-state { text-align: center; color: #666; padding: 40px 20px; font-size: 14px; }
+.info-banner { background: #f1f8ff; border: 1px solid #b1d7ff; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #0366d6; }
+.sync-indicator { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #666; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #28a745; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.sync-dot.inactive { background: #d1d5da; animation: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Activity Tracker</h1>
+    <div class="auth-section">
+      <div id="authStatus" class="auth-status">Not signed in</div>
+      <div id="googleSignInButton"></div>
+    </div>
+  </div>
+
+  <div id="infoBar" class="info-banner" style="display: none;">
+    Sign in to sync your activities to Google Drive and access them from any device.
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab(event, 'log')">Log Activity</button>
+    <button class="tab" onclick="switchTab(event, 'activities')">View All</button>
+    <button class="tab" onclick="switchTab(event, 'weekly')">Weekly Report</button>
+  </div>
+
+  <div id="log" class="tab-content active">
+    <div class="form-section">
+      <div class="form-group">
+        <label>Activity / Task name *</label>
+        <input type="text" id="activityName" placeholder="e.g., Dog kennel reservation, TSA precheck renewal">
+      </div>
+
+      <div class="form-group">
+        <label>Date *</label>
+        <input type="date" id="activityDate">
+      </div>
+
+      <div class="form-group">
+        <label>Details</label>
+        <textarea id="activityDetails" placeholder="e.g., Dates: Aug 15-20, Deposit: $50 paid, Confirmation #12345"></textarea>
+      </div>
+
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input type="checkbox" id="isWaiting">
+          <label for="isWaiting" style="margin-bottom: 0; font-weight: 400;">I'm waiting on someone/something for this</label>
+        </div>
+      </div>
+
+      <div class="form-group" id="waitingGroup" style="display: none;">
+        <label>Who or what are you waiting on? *</label>
+        <textarea id="waitingReason" placeholder="e.g., Waiting for Home Depot to call about delivery"></textarea>
+      </div>
+
+      <div class="button-group">
+        <button class="primary" onclick="saveActivity()">Save Activity</button>
+        <button onclick="clearForm()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="activities" class="tab-content">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search by activity name..." onkeyup="filterActivities()">
+    </div>
+    <div id="activitiesList"></div>
+  </div>
+
+  <div id="weekly" class="tab-content">
+    <div id="weeklyReport"></div>
+  </div>
+</div>
+
+<script>
+const CLIENT_ID = '1051885129023-7748j3mnjm81lvav9kvg8v19ebg9ugle.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+let activities = [];
+let isAuthenticated = false;
+let userEmail = '';
+let folderId = null;
+let fileId = null;
+const gapiScript = document.createElement('script');
+
+const isWaitingCheckbox = document.getElementById('isWaiting');
+const waitingGroup = document.getElementById('waitingGroup');
+
+isWaitingCheckbox.addEventListener('change', function() {
+  waitingGroup.style.display = this.checked ? 'block' : 'none';
+});
+
+// Initialize Google Sign-In
+window.onload = function() {
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: handleCredentialResponse
+  });
+  
+  google.accounts.id.renderButton(
+    document.getElementById('googleSignInButton'),
+    { 
+      theme: 'outline', 
+      size: 'large',
+      text: 'signin_with'
+    }
+  );
+
+  loadLocalActivities();
+  document.getElementById('activityDate').valueAsDate = new Date();
+};
+
+function handleCredentialResponse(response) {
+  const token = response.credential;
+  const payload = JSON.parse(atob(token.split('.')[1]));
+  userEmail = payload.email;
+  isAuthenticated = true;
+  updateAuthStatus();
+  initializeGoogleDrive(token);
+}
+
+function updateAuthStatus() {
+  const statusEl = document.getElementById('authStatus');
+  const infoBar = document.getElementById('infoBar');
+  
+  if (isAuthenticated) {
+    statusEl.textContent = `Connected: ${userEmail}`;
+    statusEl.classList.add('connected');
+    infoBar.style.display = 'none';
+  } else {
+    statusEl.textContent = 'Not signed in';
+    statusEl.classList.remove('connected');
+    infoBar.style.display = 'block';
+  }
+}
+
+function initializeGoogleDrive(idToken) {
+  gapi.load('client', async () => {
+    await gapi.client.init({
+      apiKey: 'AIzaSyDemoKey',
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+    });
+    
+    await setupGoogleDriveFolder(idToken);
+  });
+}
+
+async function setupGoogleDriveFolder(idToken) {
+  try {
+    // Check if ActivityTracker folder exists
+    const response = await gapi.client.drive.files.list({
+      q: "name='ActivityTracker' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+      spaces: 'drive',
+      pageSize: 1,
+      fields: 'files(id, name)'
+    });
+
+    if (response.result.files.length > 0) {
+      folderId = response.result.files[0].id;
+    } else {
+      // Create folder
+      const folderResponse = await gapi.client.drive.files.create({
+        resource: {
+          name: 'ActivityTracker',
+          mimeType: 'application/vnd.google-apps.folder'
+        },
+        fields: 'id'
+      });
+      folderId = folderResponse.result.id;
+    }
+
+    await loadFromGoogleDrive();
+  } catch (error) {
+    console.error('Error setting up Google Drive:', error);
+  }
+}
+
+async function loadFromGoogleDrive() {
+  try {
+    const response = await gapi.client.drive.files.list({
+      q: `'${folderId}' in parents and name='activities.json' and trashed=false`,
+      spaces: 'drive',
+      pageSize: 1,
+      fields: 'files(id, name)'
+    });
+
+    if (response.result.files.length > 0) {
+      fileId = response.result.files[0].id;
+      await downloadActivities();
+    } else {
+      // Create new file
+      await createActivitiesFile();
+    }
+  } catch (error) {
+    console.error('Error loading from Google Drive:', error);
+  }
+}
+
+async function downloadActivities() {
+  try {
+    const response = await gapi.client.drive.files.get({
+      fileId: fileId,
+      alt: 'media'
+    });
+    activities = response.result || [];
+    displayActivities();
+  } catch (error) {
+    console.error('Error downloading activities:', error);
+  }
+}
+
+async function createActivitiesFile() {
+  try {
+    const response = await gapi.client.drive.files.create({
+      resource: {
+        name: 'activities.json',
+        parents: [folderId],
+        mimeType: 'application/json'
+      },
+      media: {
+        mimeType: 'application/json',
+        body: JSON.stringify([])
+      },
+      fields: 'id'
+    });
+    fileId = response.result.id;
+  } catch (error) {
+    console.error('Error creating file:', error);
+  }
+}
+
+async function syncToGoogleDrive() {
+  if (!isAuthenticated || !fileId) return;
+  
+  try {
+    await gapi.client.drive.files.update({
+      fileId: fileId,
+      media: {
+        mimeType: 'application/json',
+        body: JSON.stringify(activities)
+      }
+    });
+    console.log('Synced to Google Drive');
+  } catch (error) {
+    console.error('Error syncing to Google Drive:', error);
+  }
+}
+
+function loadLocalActivities() {
+  const local = localStorage.getItem('activities');
+  if (local) {
+    activities = JSON.parse(local);
+  }
+}
+
+function saveActivity() {
+  const name = document.getElementById('activityName').value.trim();
+  const date = document.getElementById('activityDate').value;
+  const details = document.getElementById('activityDetails').value.trim();
+  const isWaiting = document.getElementById('isWaiting').checked;
+  const waitingReason = document.getElementById('waitingReason').value.trim();
+
+  if (!name || !date) {
+    alert('Please fill in activity name and date');
+    return;
+  }
+
+  if (isWaiting && !waitingReason) {
+    alert('Please explain what you\'re waiting on');
+    return;
+  }
+
+  const activity = {
+    id: Date.now(),
+    name: name,
+    date: date,
+    details: details,
+    isWaiting: isWaiting,
+    waitingReason: waitingReason,
+    createdAt: new Date().toISOString()
+  };
+
+  activities.push(activity);
+  localStorage.setItem('activities', JSON.stringify(activities));
+  
+  if (isAuthenticated) {
+    syncToGoogleDrive();
+  }
+  
+  clearForm();
+  alert('Activity saved!');
+}
+
+function clearForm() {
+  document.getElementById('activityName').value = '';
+  document.getElementById('activityDate').value = '';
+  document.getElementById('activityDetails').value = '';
+  document.getElementById('isWaiting').checked = false;
+  document.getElementById('waitingReason').value = '';
+  waitingGroup.style.display = 'none';
+  document.getElementById('activityDate').valueAsDate = new Date();
+}
+
+function switchTab(event, tabName) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabName).classList.add('active');
+  event.target.classList.add('active');
+  
+  if (tabName === 'activities') {
+    displayActivities();
+  } else if (tabName === 'weekly') {
+    displayWeeklyReport();
+  }
+}
+
+function displayActivities() {
+  const container = document.getElementById('activitiesList');
+  if (activities.length === 0) {
+    container.innerHTML = '<div class="empty-state">No activities logged yet. Start by logging your first activity!</div>';
+    return;
+  }
+
+  const sorted = [...activities].sort((a, b) => new Date(b.date) - new Date(a.date));
+  container.innerHTML = sorted.map(activity => `
+    <div class="activity-item ${activity.isWaiting ? 'waiting' : ''}">
+      <div class="activity-header">
+        <div class="activity-title">${escapeHtml(activity.name)}</div>
+        <div class="activity-date">${formatDate(activity.date)}</div>
+      </div>
+      ${activity.details ? `<div class="activity-details">${escapeHtml(activity.details)}</div>` : ''}
+      ${activity.isWaiting ? `<div class="waiting-badge">⏳ Waiting on: ${escapeHtml(activity.waitingReason)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function filterActivities() {
+  const query = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = activities.filter(a => a.name.toLowerCase().includes(query));
+  
+  const container = document.getElementById('activitiesList');
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state">No activities found matching that search.</div>';
+    return;
+  }
+
+  const sorted = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
+  container.innerHTML = sorted.map(activity => `
+    <div class="activity-item ${activity.isWaiting ? 'waiting' : ''}">
+      <div class="activity-header">
+        <div class="activity-title">${escapeHtml(activity.name)}</div>
+        <div class="activity-date">${formatDate(activity.date)}</div>
+      </div>
+      ${activity.details ? `<div class="activity-details">${escapeHtml(activity.details)}</div>` : ''}
+      ${activity.isWaiting ? `<div class="waiting-badge">⏳ Waiting on: ${escapeHtml(activity.waitingReason)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function displayWeeklyReport() {
+  const today = new Date();
+  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const weeklyActivities = activities.filter(a => {
+    const actDate = new Date(a.date);
+    return actDate >= sevenDaysAgo && actDate <= today;
+  });
+
+  const completed = weeklyActivities.filter(a => !a.isWaiting);
+  const waiting = weeklyActivities.filter(a => a.isWaiting);
+
+  const container = document.getElementById('weeklyReport');
+
+  if (weeklyActivities.length === 0) {
+    container.innerHTML = '<div class="empty-state">No activities this week yet.</div>';
+    return;
+  }
+
+  let html = '<div class="weekly-report">';
+  html += `<h2 style="margin-bottom: 20px; font-size: 18px;">Week of ${formatDate(sevenDaysAgo)} to ${formatDate(today)}</h2>`;
+
+  if (completed.length > 0) {
+    html += '<div class="report-section">';
+    html += `<h3>✓ Completed (${completed.length})</h3>`;
+    html += completed.sort((a, b) => new Date(b.date) - new Date(a.date)).map(a => 
+      `<div class="report-item"><strong>${escapeHtml(a.name)}</strong> — ${formatDate(a.date)}</div>`
+    ).join('');
+    html += '</div>';
+  }
+
+  if (waiting.length > 0) {
+    html += '<div class="report-section">';
+    html += `<h3>⏳ Waiting On (${waiting.length})</h3>`;
+    html += waiting.sort((a, b) => new Date(b.date) - new Date(a.date)).map(a => 
+      `<div class="report-item"><strong>${escapeHtml(a.name)}</strong> — Waiting on: ${escapeHtml(a.waitingReason)}</div>`
+    ).join('');
+    html += '</div>';
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+<script async src="https://accounts.google.com/gsi/client"></script>
+<script src="https://apis.google.com/js/api.js"></script>
+</body>
+</html>
